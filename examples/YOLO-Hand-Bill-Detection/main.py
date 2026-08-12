@@ -42,6 +42,26 @@ def label_txt_color(conf: float) -> tuple[int, int, int]:
     return (0, 0, 0) if conf < HIGH_CONF else (255, 255, 255)
 
 
+def tighten_box(box, inset: float, frame_area: float) -> tuple[float, float, float, float]:
+    """Shrink a detection box toward its center so it hugs the bill.
+
+    Bigger (looser) boxes shrink proportionally more, keeping detections focused
+    instead of spanning the whole frame. ``inset`` is the base fraction shrunk
+    from each side; ``frame_area`` scales it up for full-frame detections.
+    """
+    x1, y1, x2, y2 = (float(v) for v in box)
+    w, h = x2 - x1, y2 - y1
+    if frame_area <= 0 or w <= 0 or h <= 0:
+        return x1, y1, x2, y2
+    area_frac = (w * h) / frame_area
+    k = inset * (1.0 + area_frac)  # sloppy full-frame boxes get extra tightening
+    nx1, ny1 = x1 + w * k, y1 + h * k
+    nx2, ny2 = x2 - w * k, y2 - h * k
+    if nx2 - nx1 < 8 or ny2 - ny1 < 8:  # keep a minimum visible box size
+        return x1, y1, x2, y2
+    return nx1, ny1, nx2, ny2
+
+
 class HandBillDetector:
     """Detect hands holding bills directly with a single YOLO model.
 
@@ -52,12 +72,13 @@ class HandBillDetector:
         imgsz (int): Inference image size used by the model.
     """
 
-    def __init__(self, weights: str, device: str = "", conf: float = 0.25, imgsz: int = 640) -> None:
+    def __init__(self, weights: str, device: str = "", conf: float = 0.25, imgsz: int = 640, box_inset: float = 0.1) -> None:
         """Initialize the hand_bill detection model and configuration."""
         self.model = YOLO(weights)
         self.device = device
         self.conf = conf
         self.imgsz = imgsz
+        self.box_inset = box_inset
 
     @staticmethod
     def is_video_source(source: str | int) -> bool:
@@ -122,11 +143,17 @@ class HandBillDetector:
             boxes = result.boxes if result.boxes is not None else None
 
             annotator = Annotator(frame, line_width=3, pil=False)
+            frame_area = frame.shape[0] * frame.shape[1]
             frame_hits = 0
             if boxes is not None and len(boxes):
                 for box, conf, cls in zip(boxes.xyxy.cpu().numpy(), boxes.conf.cpu().numpy(), boxes.cls.cpu().numpy()):
                     label = f"{self.model.names.get(int(cls), 'hand_bill')} {float(conf):.2f}"
-                    annotator.box_label(box, label, color=box_color(float(conf)), txt_color=label_txt_color(float(conf)))
+                    annotator.box_label(
+                        tighten_box(box, self.box_inset, frame_area),
+                        label,
+                        color=box_color(float(conf)),
+                        txt_color=label_txt_color(float(conf)),
+                    )
                     frame_hits += 1
                     total_hand_bills += 1
 
@@ -185,6 +212,7 @@ def parse_opt() -> argparse.Namespace:
     parser.add_argument("--device", default="", help='cuda device, i.e. 0 or 0,1,2,3 or cpu/mps, "" for auto-detection')
     parser.add_argument("--conf", type=float, default=0.25, help="confidence threshold for detections")
     parser.add_argument("--imgsz", type=int, default=640, help="inference size (pixels)")
+    parser.add_argument("--box-inset", type=float, default=0.1, help="base fraction to shrink each box toward its center; larger boxes shrink more (0 = off, e.g. 0.15 = tighter/smaller)")
     parser.add_argument("--save", action="store_true", help="save annotated outputs")
     parser.add_argument("--show", action="store_true", help="display annotated frames in a window")
     parser.add_argument("--output-dir", type=str, default="runs/cctv", help="directory for saved outputs")
@@ -198,6 +226,7 @@ def main(opt: argparse.Namespace) -> None:
         device=opt.device,
         conf=opt.conf,
         imgsz=opt.imgsz,
+        box_inset=opt.box_inset,
     )
     detector.predict(
         source=opt.source,

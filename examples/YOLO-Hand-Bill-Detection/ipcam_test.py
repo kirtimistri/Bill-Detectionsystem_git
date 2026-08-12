@@ -28,6 +28,7 @@ from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
 
 HIGH_CONF = 0.6
+BOX_INSET = 0.1
 
 
 def box_color(conf: float) -> tuple[int, int, int]:
@@ -38,6 +39,20 @@ def box_color(conf: float) -> tuple[int, int, int]:
 def label_txt_color(conf: float) -> tuple[int, int, int]:
     """Black text on orange (low-confidence) labels for readability, white on green."""
     return (0, 0, 0) if conf < HIGH_CONF else (255, 255, 255)
+
+
+def tighten_box(box, inset: float, frame_area: float):
+    """Shrink a detection box toward its center; bigger boxes shrink more."""
+    x1, y1, x2, y2 = (float(v) for v in box)
+    w, h = x2 - x1, y2 - y1
+    if frame_area <= 0 or w <= 0 or h <= 0:
+        return box
+    k = inset * (1.0 + (w * h) / frame_area)
+    nx1, ny1 = x1 + w * k, y1 + h * k
+    nx2, ny2 = x2 - w * k, y2 - h * k
+    if nx2 - nx1 < 8 or ny2 - ny1 < 8:
+        return box
+    return nx1, ny1, nx2, ny2
 
 
 class IPCamDetector:
@@ -80,11 +95,17 @@ class IPCamDetector:
             boxes = results.boxes
 
             annotator = Annotator(frame, line_width=2, font_size=10, pil=False)
+            frame_area = frame.shape[0] * frame.shape[1]
             frame_hits = 0
             if boxes is not None and len(boxes):
                 for box, c, cls in zip(boxes.xyxy.cpu().numpy(), boxes.conf.cpu().numpy(), boxes.cls.cpu().numpy()):
                     label = f"{self.model.names.get(int(cls), 'hand_bill')} {float(c):.2f}"
-                    annotator.box_label(box, label, color=box_color(float(c)), txt_color=label_txt_color(float(c)))
+                    annotator.box_label(
+                        tighten_box(box, BOX_INSET, frame_area),
+                        label,
+                        color=box_color(float(c)),
+                        txt_color=label_txt_color(float(c)),
+                    )
                     frame_hits += 1
                 detections += frame_hits
                 frames_with_bill += 1
