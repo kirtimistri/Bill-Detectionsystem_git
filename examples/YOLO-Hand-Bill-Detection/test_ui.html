@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hand-Bill Detector — Test UI</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c2128;--border:#30363d;--text:#e6edf3;
+        --muted:#8b949e;--green:#2ea043;--orange:#f0883e;--accent:#58a6ff;--red:#f85149}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+  header{display:flex;align-items:center;gap:12px;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--panel)}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.45}}
+  header h1{font-size:17px;margin:0}
+  header .sub{color:var(--muted);font-size:13px}
+  main{max-width:1140px;margin:22px auto;padding:0 22px;display:grid;grid-template-columns:330px 1fr;gap:22px}
+  @media(max-width:860px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px}
+  label{display:block;font-size:12px;color:var(--muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.04em}
+  select,input[type=range],input[type=text]{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:14px}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
+  .btnrow{display:flex;gap:8px;margin-top:16px}
+  .btnrow button{margin:0;padding:10px;font-size:13.5px}
+  .btnrow .stop{background:var(--red)}
+  .ensrow{display:flex;align-items:center;gap:9px;margin-top:16px}
+  .ensrow input[type=checkbox]{width:17px;height:17px;accent-color:var(--green);flex:0 0 auto}
+  .ensrow label{display:inline;font-size:13px;color:var(--text);text-transform:none;letter-spacing:0;margin:0}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .confrow{display:flex;align-items:center;gap:12px}
+  .confrow output{min-width:52px;text-align:right;font-weight:600;color:var(--accent)}
+  .drop{border:2px dashed var(--border);border-radius:12px;padding:34px 16px;text-align:center;color:var(--muted);
+        cursor:pointer;transition:.18s;margin-top:6px}
+  .drop:hover,.drop.over{border-color:var(--accent);color:var(--text);background:rgba(88,166,255,.06)}
+  .drop .ico{font-size:30px;display:block;margin-bottom:8px}
+  button{width:100%;margin-top:16px;padding:12px;border:0;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;
+         background:var(--green);color:#fff;transition:.15s}
+  button:hover{filter:brightness(1.12)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .result h2{margin:0 0 12px;font-size:15px}
+  .imgwrap{position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#000;min-height:220px;display:flex;align-items:center;justify-content:center}
+  .imgwrap img{max-width:100%;max-height:70vh;display:block}
+  .spinner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(13,17,23,.78);color:var(--muted);font-size:13px}
+  .ring{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .chip{padding:6px 10px;border-radius:999px;font-size:12.5px;font-weight:600;display:flex;gap:6px;align-items:center}
+  .chip.g{background:rgba(46,160,67,.15);color:#56d364;border:1px solid rgba(46,160,67,.4)}
+  .chip.o{background:rgba(240,136,62,.15);color:#ffb37a;border:1px solid rgba(240,136,62,.4)}
+  .summary{display:flex;gap:18px;margin-top:12px;flex-wrap:wrap}
+  .stat{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;min-width:120px}
+  .stat b{display:block;font-size:19px}
+  .stat span{font-size:11px;color:var(--muted)}
+  .err{background:rgba(248,81,73,.12);border:1px solid rgba(248,81,73,.4);color:#ff9a94;border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13px}
+  .toggle{font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;margin-top:10px;text-decoration:underline}
+</style>
+</head>
+<body>
+<header>
+  <div class="dot"></div>
+  <h1>Hand-Bill Detector</h1>
+  <span class="sub">image testing UI · same pipeline as the CCTV/live scripts</span>
+</header>
+<main>
+  <section class="card">
+    <label>Model</label>
+    <select id="model"></select>
+    <div class="hint" id="modelhint"></div>
+
+    <label>Confidence threshold</label>
+    <div class="confrow">
+      <input type="range" id="conf" min="0.05" max="0.90" step="0.05" value="0.25">
+      <output id="confval">0.25</output>
+    </div>
+
+    <label>Inference size</label>
+    <select id="imgsz">
+      <option value="416" selected>416 · fast</option>
+      <option value="640">640 · balanced</option>
+      <option value="320">320 · fastest</option>
+    </select>
+    <div class="hint">Lower = much faster on CPU, slightly less precise</div>
+
+    <div class="ensrow">
+      <input type="checkbox" id="multi">
+      <label for="multi">Multi-scale — merge 416 + 640 (most accurate)</label>
+    </div>
+    <div class="hint">Runs inference at 416 <b>and</b> 640 and merges both — catches the phone-photo styles each single scale misses (8/8 bills, 0 false alarms in testing). ~2–3× slower per image, so live streams stay single-scale.</div>
+
+    <label>Box tightness</label>
+    <div class="confrow">
+      <input type="range" id="inset" min="0.00" max="0.30" step="0.05" value="0.15">
+      <output id="insetval">0.15</output>
+    </div>
+    <div class="hint">Higher = smaller, tighter boxes around the bill</div>
+
+    <div class="ensrow">
+      <input type="checkbox" id="ens">
+      <label for="ens">High-precision mode — confirm against v2</label>
+    </div>
+    <div class="hint">Runs the selected model + v2 (the reliable one); boxes v2 confirms get 🟢 ✓, v2-missed guesses get 🟠 ?</div>
+
+    <div class="ensrow">
+      <input type="checkbox" id="shape" checked>
+      <label for="shape">Bill-shape filter — elongated notes only</label>
+    </div>
+    <div class="hint">Keeps elongated bill-shaped boxes, and near-square boxes when a hand is present (hand+note together); drops lone slivers &amp; full-frame junk</div>
+
+    <div class="ensrow">
+      <input type="checkbox" id="hand" checked>
+      <label for="hand">Hand must be near the bill (skin check)</label>
+    </div>
+    <div class="hint">A hand must overlap or sit right next to the bill, or the box is ignored (kills lone papers/receipts). Auto-disables on very dark frames so night/IR CCTV isn't affected.</div>
+
+    <div class="ensrow">
+      <input type="checkbox" id="white" checked>
+      <label for="white">White-paper check (bills are white w/ black print)</label>
+    </div>
+    <div class="hint">Bills are white and desaturated with dark text; strongly colored or near-black boxes are dropped. Auto-disables on very dark IR frames.</div>
+
+    <div class="drop" id="drop">
+      <span class="ico">🖼️</span>
+      Drop an image here<br>or click to browse
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+
+    <button id="go" disabled>Detect</button>
+    <div class="hint" style="text-align:center">Tip: testing with a phone photo or CCTV frame?</div>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:18px 0 2px">
+    <label>RTSP / CCTV live stream</label>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="rtsp" placeholder="rtsp://user:pass@192.168.0.50:554/stream1" style="flex:1">
+      <button id="savecam" style="flex:0 0 auto;width:auto;margin:0;padding:9px 14px;background:var(--accent)">＋ Save</button>
+    </div>
+    <select id="camsel" style="margin-top:8px">
+      <option value="">— saved cameras —</option>
+    </select>
+    <div class="hint">Paste an RTSP/HTTP URL, hit Save to keep it in the list; pick a saved one anytime. Local video paths (e.g. /home/you/clip.mp4) also work without saving.</div>
+    <div class="hint">💡 For the smoothest live video, set <b>Inference size</b> above to <b>320 · fastest</b>.</div>
+    <div class="btnrow">
+      <button id="sstart" style="flex:1">▶ Start stream</button>
+      <button id="sstop" class="stop" style="flex:1" disabled>■ Stop</button>
+    </div>
+    <div class="hint" id="streamstat">not streaming</div>
+  </section>
+
+  <section class="card result">
+    <h2>Result</h2>
+    <div class="imgwrap">
+      <img id="out" alt="annotated result">
+      <img id="stream" alt="live CCTV stream" hidden>
+    </div>
+    <button class="toggle" id="tog" hidden>show original</button>
+    <div class="summary" id="summary"></div>
+    <div class="chips" id="chips"></div>
+    <div class="err" id="err" hidden></div>
+  </section>
+</main>
+
+<script>
+const MODELS = __MODELS__;
+const $ = id => document.getElementById(id);
+const modelSel = $('model'), confEl = $('conf'), confVal = $('confval');
+
+// ---- model dropdown ----
+MODELS.forEach(m => { const o = document.createElement('option'); o.value = m.file; o.textContent = m.label; modelSel.appendChild(o); });
+const pickHint = () => { const m = MODELS.find(x => x.file === modelSel.value); $('modelhint').textContent = '↳ ' + (m ? m.note : ''); };
+modelSel.addEventListener('change', pickHint); pickHint();
+
+confEl.addEventListener('input', () => confVal.textContent = (+confEl.value).toFixed(2));
+$('inset').addEventListener('input', () => $('insetval').textContent = (+$('inset').value).toFixed(2));
+$('ens').addEventListener('change', () => currentFile && detect());
+$('multi').addEventListener('change', () => currentFile && detect());
+$('shape').addEventListener('change', () => currentFile && detect());
+$('hand').addEventListener('change', () => currentFile && detect());
+$('white').addEventListener('change', () => currentFile && detect());
+
+// ---- file selection ----
+let currentFile = null, showOrig = false, lastAnnotated = null, lastOriginal = null;
+const drop = $('drop'), fileEl = $('file');
+drop.addEventListener('click', () => fileEl.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]); });
+fileEl.addEventListener('change', () => { if (fileEl.files.length) setFile(fileEl.files[0]); });
+function setFile(f) {
+  if (streamOn) streamStop();   // switching to image testing stops any live stream
+  currentFile = f; showOrig = false; $('tog').hidden = true;
+  drop.innerHTML = '<span class="ico">✅</span>' + f.name + '<br><small>click to change</small>';
+  $('go').disabled = false; detect();
+}
+// re-detect when model/conf/imgsz/tightness changes
+modelSel.addEventListener('change', () => currentFile && detect());
+confEl.addEventListener('change', () => currentFile && detect());
+$('imgsz').addEventListener('change', () => currentFile && detect());
+$('inset').addEventListener('change', () => currentFile && detect());
+$('tog').addEventListener('click', () => { showOrig = !showOrig; $('out').src = showOrig ? lastOriginal : lastAnnotated; $('tog').textContent = showOrig ? 'show annotated' : 'show original'; });
+
+// ---- saved cameras (persisted in the browser) ----
+const SAVE_KEY = 'savedCameras';
+let savedCams = [];
+try { savedCams = JSON.parse(localStorage.getItem(SAVE_KEY) || '[]'); } catch (e) { savedCams = []; }
+const camsel = $('camsel');
+function renderCams() {
+  camsel.innerHTML = '<option value="">— saved cameras —</option>' +
+    savedCams.map((c, i) => `<option value="${i}">${c.name || c.url}</option>`).join('');
+}
+$('savecam').addEventListener('click', () => {
+  const url = $('rtsp').value.trim();
+  if (!url) { streamstat.textContent = '⚠ Type an RTSP URL first'; return; }
+  if (!/^(rtsp|http|https|rtmp):\/\//i.test(url)) {
+    streamstat.textContent = '⚠ Only rtsp:// http:// https:// rtmp:// URLs can be saved (local files are used directly)';
+    return;
+  }
+  const name = url.replace(/^[a-z]+:\/\//i, '').split(/[/@]/).pop() || url;
+  savedCams = savedCams.filter(c => c.url !== url);  // no duplicates
+  savedCams.push({ name, url });
+  localStorage.setItem(SAVE_KEY, JSON.stringify(savedCams));
+  renderCams();
+  streamstat.textContent = '✓ saved: ' + url;
+});
+camsel.addEventListener('change', () => {
+  const i = camsel.value;
+  if (i !== '') $('rtsp').value = savedCams[+i].url;
+});
+renderCams();
+
+// ---- RTSP / CCTV live stream ----
+let streamOn = false;
+const sstart = $('sstart'), sstop = $('sstop'), streamstat = $('streamstat'), streamImg = $('stream');
+
+async function streamStart() {
+  const url = $('rtsp').value.trim();
+  if (!url) { streamstat.textContent = '⚠ Enter an RTSP/HTTP URL or a video path first'; return; }
+  streamstat.textContent = 'connecting…';
+  const res = await fetch('/stream/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, model: modelSel.value, conf: confEl.value, imgsz: $('imgsz').value, inset: $('inset').value, shape: $('shape').checked, hand: $('hand').checked, white: $('white').checked })
+  });
+  const d = await res.json();
+  if (!d.ok) { streamstat.textContent = '⚠ ' + d.error; return; }
+  streamOn = true;
+  sstart.disabled = true; sstop.disabled = false; $('go').disabled = true;
+  $('out').hidden = true; $('tog').hidden = true; $('summary').innerHTML = ''; $('chips').innerHTML = '';
+  streamImg.src = '/stream.mjpeg?t=' + Date.now();
+  streamImg.hidden = false;
+  pollStatus();
+}
+
+async function streamStop() {
+  streamOn = false;
+  try { await fetch('/stream/stop', { method: 'POST' }); } catch (e) {}
+  sstart.disabled = false; sstop.disabled = true; $('go').disabled = false;
+  streamImg.src = ''; streamImg.hidden = true; $('out').hidden = false;
+  streamstat.textContent = 'stopped';
+}
+
+async function pollStatus() {
+  if (!streamOn) return;
+  try {
+    const d = await (await fetch('/stream/status')).json();
+    if (!d.running) { streamStop(); return; }
+    streamstat.textContent = d.status;
+  } catch (e) {}
+  setTimeout(pollStatus, 2000);
+}
+
+sstart.addEventListener('click', streamStart);
+sstop.addEventListener('click', streamStop);
+
+// ---- detection ----
+async function detect() {
+  if (!currentFile) return;
+  const err = $('err');
+  err.hidden = true; $('summary').innerHTML = ''; $('chips').innerHTML = ''; $('tog').hidden = true;
+  try {
+    const res = await fetch('/detect', {
+      method: 'POST',
+      headers: { 'X-Model': modelSel.value, 'X-Conf': confEl.value, 'X-Imgsz': $('imgsz').value, 'X-Inset': $('inset').value, 'X-Ensemble': $('ens').checked ? '1' : '0', 'X-MultiScale': $('multi').checked ? '1' : '0', 'X-Shape': $('shape').checked ? '1' : '0', 'X-Hand': $('hand').checked ? '1' : '0', 'X-White': $('white').checked ? '1' : '0' },
+      body: currentFile
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Detection failed');
+    lastAnnotated = 'data:image/jpeg;base64,' + data.image;
+    if (lastOriginal && lastOriginal.startsWith('blob:')) URL.revokeObjectURL(lastOriginal);
+    lastOriginal = URL.createObjectURL(currentFile);   // original from the local file, no extra download
+    $('out').src = lastAnnotated; $('tog').hidden = true;
+
+    const n = data.count, dt = data.detections || [], cc = data.confirmed_count;
+    $('summary').innerHTML =
+      `<div class="stat"><b>${n}</b><span>detection${n===1?'':'s'}</span></div>` +
+      (cc != null ? `<div class="stat"><b>${cc}</b><span>confirmed ✓</span></div>` : '') +
+      `<div class="stat"><b>${dt.length ? Math.max(...dt.map(d=>d.conf)).toFixed(2) : '—'}</b><span>best confidence</span></div>` +
+      `<div class="stat"><b>${data.elapsed}s</b><span>inference</span></div>`;
+
+    $('chips').innerHTML = dt.length ? dt.map(d =>
+      `<span class="chip ${d.color==='green'?'g':'o'}">● ${d.conf.toFixed(2)} · [${d.box.join(', ')}]${d.confirmed != null ? (d.confirmed ? ' ✓' : ' ?') : ''}</span>`).join('') :
+      '<div class="hint">No bill found at this threshold.</div>';
+  } catch (e) {
+    err.hidden = false; err.textContent = '⚠ ' + e.message;
+  }
+}
+</script>
+</body>
+</html>

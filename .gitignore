@@ -10,3 +10,14 @@ __pycache__/
 
 # training scratch/cache
 *.cache
+
+# detection / training output (100s of MB of regenerable files - never push)
+runs/
+local_runs/
+
+# ad-hoc evaluation scripts
+/evaluate_*.py
+
+# auto-built training datasets (v3/v4); the main bill_hand_dataset/ stays tracked
+bill_hand_dataset_v3/
+bill_hand_dataset_v4/

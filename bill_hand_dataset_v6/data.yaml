@@ -1,0 +1,7 @@
+path: bill_hand_dataset_v6
+train: images/train
+val: images/val
+
+names:
+  0: hand_bill
+  1: no_bill

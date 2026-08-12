@@ -27,8 +27,11 @@ import cv2
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator
 
+# shared "hand holding bill" verdict (shape + hand + white checks) from main.py
+from main import bill_ok  # noqa: E402
+
 HIGH_CONF = 0.6
-BOX_INSET = 0.1
+BOX_INSET = 0.15
 
 
 def box_color(conf: float) -> tuple[int, int, int]:
@@ -41,15 +44,29 @@ def label_txt_color(conf: float) -> tuple[int, int, int]:
     return (0, 0, 0) if conf < HIGH_CONF else (255, 255, 255)
 
 
-def tighten_box(box, inset: float, frame_area: float):
-    """Shrink a detection box toward its center; bigger boxes shrink more."""
+def tighten_box(box, inset: float, frame_area: float, frame_shape=None):
+    """Shrink a detection box toward its center; bigger boxes shrink more.
+
+    With ``frame_shape`` (h, w) a side already touching the image boundary is
+    NOT pulled inward, so a bill at the edge of the frame keeps its box.
+    """
     x1, y1, x2, y2 = (float(v) for v in box)
     w, h = x2 - x1, y2 - y1
     if frame_area <= 0 or w <= 0 or h <= 0:
         return box
-    k = inset * (1.0 + (w * h) / frame_area)
-    nx1, ny1 = x1 + w * k, y1 + h * k
-    nx2, ny2 = x2 - w * k, y2 - h * k
+    k = min(inset * (1.0 + (w * h) / frame_area), 0.35)  # never collapse a box
+    dx, dy = w * k, h * k
+    if frame_shape is not None:
+        W, H = float(frame_shape[1]), float(frame_shape[0])
+        sx1 = x1 if x1 > 2 else 0.0
+        sx2 = (W - x2) if x2 < W - 2 else 0.0
+        sy1 = y1 if y1 > 2 else 0.0
+        sy2 = (H - y2) if y2 < H - 2 else 0.0
+    else:
+        sx1 = sx2 = dx
+        sy1 = sy2 = dy
+    nx1, ny1 = x1 + min(dx, sx1), y1 + min(dy, sy1)
+    nx2, ny2 = x2 - min(dx, sx2), y2 - min(dy, sy2)
     if nx2 - nx1 < 8 or ny2 - ny1 < 8:
         return box
     return nx1, ny1, nx2, ny2
@@ -99,9 +116,11 @@ class IPCamDetector:
             frame_hits = 0
             if boxes is not None and len(boxes):
                 for box, c, cls in zip(boxes.xyxy.cpu().numpy(), boxes.conf.cpu().numpy(), boxes.cls.cpu().numpy()):
+                    if not bill_ok(frame, box, True, True, True):
+                        continue  # not a hand holding a bill -> false alarm
                     label = f"{self.model.names.get(int(cls), 'hand_bill')} {float(c):.2f}"
                     annotator.box_label(
-                        tighten_box(box, BOX_INSET, frame_area),
+                        tighten_box(box, BOX_INSET, frame_area, frame.shape),
                         label,
                         color=box_color(float(c)),
                         txt_color=label_txt_color(float(c)),
