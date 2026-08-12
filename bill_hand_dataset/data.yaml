@@ -1,4 +1,4 @@
-path: C:/Users/MY PC/Documents/git repo/bill_hand_dataset/yolo
+path: /home/kirti/Documents/Git repo ML/bill-detection-git/bill_hand_dataset/yolo
 train: images/train
 val: images/val
 
